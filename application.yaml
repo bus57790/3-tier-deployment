@@ -1,0 +1,19 @@
+# application.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: 3tier-app-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/bus57790/3-tier-deployment.git'  # Replace with your Git repo URL
+    targetRevision: HEAD
+    path: k8s/dev                                      # Path to manifests or Helm chart
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

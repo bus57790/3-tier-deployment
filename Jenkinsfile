@@ -33,6 +33,14 @@ pipeline {
                         }
                     }
                 }
+                timeout(time: 5, unit: 'MINUTES') {
+                    script {
+                        def qg = waitForQualityGate()
+                        if (qg.status != 'OK') {
+                            error "Pipeline aborted due to Quality Gate failure: ${qg.status}"
+                        }
+                    }
+                }
             }
         }
 
@@ -77,18 +85,21 @@ pipeline {
                     def envLower = params.ENVIRONMENT.toLowerCase()
                     def sshFlags = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
                     
-                    withCredentials([usernamePassword(credentialsId: 'harbor-credentials', passwordVariable: 'HARBOR_PSW', usernameVariable: 'HARBOR_USR')]) {
-                        sh "ssh ${sshFlags} ${TARGET_USER}@${TARGET_NODE} 'mkdir -p ~/app/${envLower}'"
-                        sh "scp ${sshFlags} -r deployments/${envLower}/* ${TARGET_USER}@${TARGET_NODE}:~/app/${envLower}/"
-                        sh "scp ${sshFlags} -r database ${TARGET_USER}@${TARGET_NODE}:~/app/"
+                    sshagent(credentials: ['deployer-ssh-key']) {
+                        withCredentials([usernamePassword(credentialsId: 'harbor-credentials', passwordVariable: 'HARBOR_PSW', usernameVariable: 'HARBOR_USR')]) {
+                            sh "ssh ${sshFlags} ${TARGET_USER}@${TARGET_NODE} 'mkdir -p ~/app/${envLower}'"
+                            sh "scp ${sshFlags} -r deployments/${envLower}/* ${TARGET_USER}@${TARGET_NODE}:~/app/${envLower}/"
+                            sh "scp ${sshFlags} -r database ${TARGET_USER}@${TARGET_NODE}:~/app/"
 
-                        // Pass credentials safely via SSH environment variables to prevent escape issues
-                        sh """
-                            ssh ${sshFlags} ${TARGET_USER}@${TARGET_NODE} "HARBOR_PSW='${HARBOR_PSW}' HARBOR_USR='${HARBOR_USR}' sh -c 'echo \\"\$HARBOR_PSW\\" | docker login ${HARBOR_HOST} -u \\"\$HARBOR_USR\\" --password-stdin' && \
-                            cd ~/app/${envLower} && \
-                            docker compose pull && \
-                            docker compose up -d --remove-orphans"
-                        """
+                            sh """
+                                ssh ${sshFlags} ${TARGET_USER}@${TARGET_NODE} '
+                                    echo "${HARBOR_PSW}" | docker login ${HARBOR_HOST} -u "${HARBOR_USR}" --password-stdin && \\
+                                    cd ~/app/${envLower} && \\
+                                    docker compose pull && \\
+                                    docker compose up -d --remove-orphans
+                                '
+                            """
+                        }
                     }
                 }
             }
@@ -100,13 +111,15 @@ pipeline {
             }
             steps {
                 script {
-                    sh 'git config user.name "Jenkins CI"'
-                    sh 'git config user.email "jenkins@192.168.1.184"'
-                    sh "sed -i 's|image: 192.168.1.184:9443/3tier/backend:.*|image: 192.168.1.184:9443/3tier/backend:prod-${params.IMAGE_TAG}|g' deployments/prod/k8s/02-backend.yaml"
-                    sh "sed -i 's|image: 192.168.1.184:9443/3tier/frontend:.*|image: 192.168.1.184:9443/3tier/frontend:prod-${params.IMAGE_TAG}|g' deployments/prod/k8s/03-frontend.yaml"
-                    sh 'git add deployments/prod/k8s/'
-                    sh "git commit -m 'Update PROD image tag to ${params.IMAGE_TAG} [skip ci]'"
-                    sh 'git push origin main'
+                    withCredentials([gitUsernamePassword(credentialsId: 'github-credentials', gitToolName: 'git-default')]) {
+                        sh 'git config user.name "Jenkins CI"'
+                        sh 'git config user.email "jenkins@192.168.1.184"'
+                        sh "sed -i 's|image: 192.168.1.184:9443/3tier/backend:.*|image: 192.168.1.184:9443/3tier/backend:prod-${params.IMAGE_TAG}|g' deployments/prod/k8s/02-backend.yaml"
+                        sh "sed -i 's|image: 192.168.1.184:9443/3tier/frontend:.*|image: 192.168.1.184:9443/3tier/frontend:prod-${params.IMAGE_TAG}|g' deployments/prod/k8s/03-frontend.yaml"
+                        sh 'git add deployments/prod/k8s/'
+                        sh "git commit -m 'Update PROD image tag to ${params.IMAGE_TAG} [skip ci]'"
+                        sh 'git push origin HEAD:main'
+                    }
                 }
             }
         }
@@ -118,9 +131,7 @@ pipeline {
                 def alertTitle = "🚨 DevSecOps Pipeline Failure"
                 def alertMessage = "Build *#${env.BUILD_NUMBER}* for *${env.JOB_NAME}* failed."
 
-                withCredentials([
-                    string(credentialsId: 'slack-webhook-url', variable: 'SLACK_URL')
-                ]) {
+                withCredentials([string(credentialsId: 'slack-webhook-url', variable: 'SLACK_URL')]) {
                     sendSlackNotification(alertTitle, alertMessage, env.BUILD_URL)
                 }
             }
@@ -129,11 +140,12 @@ pipeline {
         always {
             script {
                 def sshFlags = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-                // Local build node logout
                 sh "docker logout ${HARBOR_HOST} || true"
-                // Target deployment node logout
+                
                 if (params.ENVIRONMENT == 'DEV' || params.ENVIRONMENT == 'UAT') {
-                    sh "ssh ${sshFlags} ${TARGET_USER}@${TARGET_NODE} 'docker logout ${HARBOR_HOST}' || true"
+                    sshagent(credentials: ['deployer-ssh-key']) {
+                        sh "ssh ${sshFlags} ${TARGET_USER}@${TARGET_NODE} 'docker logout ${HARBOR_HOST}' || true"
+                    }
                 }
             }
             cleanWs()
