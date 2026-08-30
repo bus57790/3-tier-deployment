@@ -29,7 +29,7 @@ pipeline {
                 withSonarQubeEnv('SonarQube-Server') {
                     dir('backend') {
                         sh """
-                            mvn sonar:sonar \
+                            mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
                             -Dsonar.projectKey=3tier-backend-${params.ENVIRONMENT.toLowerCase()} \
                             -Dsonar.host.url=${SONAR_HOST}
                         """
