@@ -81,13 +81,14 @@ pipeline {
             steps {
                 script {
                     def envLower = params.ENVIRONMENT.toLowerCase()
+                    def sshFlags = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
                     
-                    sh "ssh ${TARGET_USER}@${TARGET_NODE} 'mkdir -p ~/app/${envLower}'"
-                    sh "scp -r deployments/${envLower}/* ${TARGET_USER}@${TARGET_NODE}:~/app/${envLower}/"
-                    sh "scp -r database ${TARGET_USER}@${TARGET_NODE}:~/app/"
+                    sh "ssh ${sshFlags} ${TARGET_USER}@${TARGET_NODE} 'mkdir -p ~/app/${envLower}'"
+                    sh "scp ${sshFlags} -r deployments/${envLower}/* ${TARGET_USER}@${TARGET_NODE}:~/app/${envLower}/"
+                    sh "scp ${sshFlags} -r database ${TARGET_USER}@${TARGET_NODE}:~/app/"
 
                     sh """
-                        ssh ${TARGET_USER}@${TARGET_NODE} '
+                        ssh ${sshFlags} ${TARGET_USER}@${TARGET_NODE} '
                             cd ~/app/${envLower} && \
                             docker compose pull && \
                             docker compose up -d --remove-orphans
