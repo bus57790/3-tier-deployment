@@ -15,7 +15,7 @@ services:
       - ../../database/init.sql:/docker-entrypoint-initdb.d/init.sql
 
   backend-uat:
-    image: 192.168.1.184/3tier/backend:uat-latest
+    image: 192.168.1.184:9443/3tier/backend:uat-latest
     container_name: app-backend-uat
     environment:
       APP_ENV: uat
@@ -28,7 +28,7 @@ services:
       - database-uat
 
   frontend-uat:
-    image: 192.168.1.184/3tier/frontend:uat-latest
+    image: 192.168.1.184:9443/3tier/frontend:uat-latest
     container_name: app-frontend-uat
     ports:
       - "81:80"
