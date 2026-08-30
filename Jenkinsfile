@@ -29,9 +29,7 @@ pipeline {
                     dir('backend') {
                         script {
                             def envKey = params.ENVIRONMENT.toLowerCase()
-                            sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar ' +
-                               '-Dsonar.projectKey=3tier-backend-' + envKey + ' ' +
-                               '-Dsonar.host.url=' + SONAR_HOST
+                            sh "mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=3tier-backend-${envKey} -Dsonar.host.url=${SONAR_HOST}"
                         }
                     }
                 }
@@ -84,12 +82,13 @@ pipeline {
                         sh "scp ${sshFlags} -r deployments/${envLower}/* ${TARGET_USER}@${TARGET_NODE}:~/app/${envLower}/"
                         sh "scp ${sshFlags} -r database ${TARGET_USER}@${TARGET_NODE}:~/app/"
 
-                        // Safely pipe Harbor credentials over SSH to avoid Groovy interpolation warnings
-                        sh 'ssh ' + sshFlags + ' ' + TARGET_USER + '@' + TARGET_NODE + ' ' +
-                           '"echo \'' + HARBOR_PSW + '\' | docker login ' + HARBOR_HOST + ' -u \'' + HARBOR_USR + '\' --password-stdin && ' +
-                           'cd ~/app/' + envLower + ' && ' +
-                           'docker compose pull && ' +
-                           'docker compose up -d --remove-orphans"'
+                        // Pass credentials safely via SSH environment variables to prevent escape issues
+                        sh """
+                            ssh ${sshFlags} ${TARGET_USER}@${TARGET_NODE} "HARBOR_PSW='${HARBOR_PSW}' HARBOR_USR='${HARBOR_USR}' sh -c 'echo \\"\$HARBOR_PSW\\" | docker login ${HARBOR_HOST} -u \\"\$HARBOR_USR\\" --password-stdin' && \
+                            cd ~/app/${envLower} && \
+                            docker compose pull && \
+                            docker compose up -d --remove-orphans"
+                        """
                     }
                 }
             }
@@ -103,10 +102,10 @@ pipeline {
                 script {
                     sh 'git config user.name "Jenkins CI"'
                     sh 'git config user.email "jenkins@192.168.1.184"'
-                    sh 'sed -i "s|image: 192.168.1.184:9443/3tier/backend:.*|image: 192.168.1.184:9443/3tier/backend:prod-' + params.IMAGE_TAG + '|g" deployments/prod/k8s/02-backend.yaml'
-                    sh 'sed -i "s|image: 192.168.1.184:9443/3tier/frontend:.*|image: 192.168.1.184:9443/3tier/frontend:prod-' + params.IMAGE_TAG + '|g" deployments/prod/k8s/03-frontend.yaml'
+                    sh "sed -i 's|image: 192.168.1.184:9443/3tier/backend:.*|image: 192.168.1.184:9443/3tier/backend:prod-${params.IMAGE_TAG}|g' deployments/prod/k8s/02-backend.yaml"
+                    sh "sed -i 's|image: 192.168.1.184:9443/3tier/frontend:.*|image: 192.168.1.184:9443/3tier/frontend:prod-${params.IMAGE_TAG}|g' deployments/prod/k8s/03-frontend.yaml"
                     sh 'git add deployments/prod/k8s/'
-                    sh 'git commit -m "Update PROD image tag to ' + params.IMAGE_TAG + ' [skip ci]"'
+                    sh "git commit -m 'Update PROD image tag to ${params.IMAGE_TAG} [skip ci]'"
                     sh 'git push origin main'
                 }
             }
@@ -131,10 +130,10 @@ pipeline {
             script {
                 def sshFlags = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
                 // Local build node logout
-                sh 'docker logout ' + HARBOR_HOST + ' || true'
+                sh "docker logout ${HARBOR_HOST} || true"
                 // Target deployment node logout
                 if (params.ENVIRONMENT == 'DEV' || params.ENVIRONMENT == 'UAT') {
-                    sh 'ssh ' + sshFlags + ' ' + TARGET_USER + '@' + TARGET_NODE + ' "docker logout ' + HARBOR_HOST + '" || true'
+                    sh "ssh ${sshFlags} ${TARGET_USER}@${TARGET_NODE} 'docker logout ${HARBOR_HOST}' || true"
                 }
             }
             cleanWs()
