@@ -15,14 +15,14 @@ pipeline {
         string(name: 'IMAGE_TAG', defaultValue: 'v1.0.0', description: 'Container image tag')
     }
 
+    stages {
+        stage('Checkout Source') {
+            steps {
+                git branch: "${params.ENVIRONMENT == 'PROD' ? 'main' : params.ENVIRONMENT.toLowerCase()}",
+                    url: "https://github.com/bus57790/3-tier-deployment.git"
+            }
+        }
 
-       stage('Checkout Source') {
-           steps {
-               git branch: 'main',
-               credentialsId: 'github-access-token',
-               url: 'https://github.com/bus57790/3-tier-deployment.git'
-            } 
-       }
         stage('Backend Build & Unit Test') {
             steps {
                 dir('backend') {
