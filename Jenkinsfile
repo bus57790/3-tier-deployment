@@ -57,9 +57,7 @@ pipeline {
                     def envTag = params.ENVIRONMENT.toLowerCase()
                     
                     withCredentials([usernamePassword(credentialsId: 'harbor-credentials', passwordVariable: 'HARBOR_PSW', usernameVariable: 'HARBOR_USR')]) {
-                        sh '''
-                            echo "$HARBOR_PSW" | docker login ${HARBOR_HOST} -u "$HARBOR_USR" --password-stdin
-                        '''
+                        sh 'echo "$HARBOR_PSW" | docker login ${HARBOR_HOST} -u "$HARBOR_USR" --password-stdin'
                     }
                     
                     sh "docker push ${HARBOR_HOST}/${HARBOR_PROJECT}/frontend:${envTag}-${params.IMAGE_TAG}"
@@ -83,17 +81,20 @@ pipeline {
                     def envLower = params.ENVIRONMENT.toLowerCase()
                     def sshFlags = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
                     
-                    sh "ssh ${sshFlags} ${TARGET_USER}@${TARGET_NODE} 'mkdir -p ~/app/${envLower}'"
-                    sh "scp ${sshFlags} -r deployments/${envLower}/* ${TARGET_USER}@${TARGET_NODE}:~/app/${envLower}/"
-                    sh "scp ${sshFlags} -r database ${TARGET_USER}@${TARGET_NODE}:~/app/"
+                    withCredentials([usernamePassword(credentialsId: 'harbor-credentials', passwordVariable: 'HARBOR_PSW', usernameVariable: 'HARBOR_USR')]) {
+                        sh "ssh ${sshFlags} ${TARGET_USER}@${TARGET_NODE} 'mkdir -p ~/app/${envLower}'"
+                        sh "scp ${sshFlags} -r deployments/${envLower}/* ${TARGET_USER}@${TARGET_NODE}:~/app/${envLower}/"
+                        sh "scp ${sshFlags} -r database ${TARGET_USER}@${TARGET_NODE}:~/app/"
 
-                    sh """
-                        ssh ${sshFlags} ${TARGET_USER}@${TARGET_NODE} '
-                            cd ~/app/${envLower} && \
-                            docker compose pull && \
-                            docker compose up -d --remove-orphans
-                        '
-                    """
+                        sh """
+                            ssh ${sshFlags} ${TARGET_USER}@${TARGET_NODE} "
+                                echo '${HARBOR_PSW}' | docker login ${HARBOR_HOST} -u '${HARBOR_USR}' --password-stdin && \
+                                cd ~/app/${envLower} && \
+                                docker compose pull && \
+                                docker compose up -d --remove-orphans
+                            "
+                        """
+                    }
                 }
             }
         }
