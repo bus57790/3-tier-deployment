@@ -1,7 +1,7 @@
 FROM node:18-alpine AS build
 WORKDIR /app
 ARG ENV_FILE=.env.dev
-COPY package*.json ./
+COPY package.json* package-lock.json* ./
 RUN npm install
 COPY . .
 COPY ${ENV_FILE} .env
