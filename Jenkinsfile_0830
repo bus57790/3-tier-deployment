@@ -27,14 +27,11 @@ pipeline {
             steps {
                 withSonarQubeEnv('SonarQube-Server') {
                     dir('backend') {
-                        script {
-                            def envKey = params.ENVIRONMENT.toLowerCase()
-                            sh """
-                                mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-                                -Dsonar.projectKey=3tier-backend-${envKey} \
-                                -Dsonar.host.url=${SONAR_HOST}
-                            """
-                        }
+                        sh '''
+                            mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+                            -Dsonar.projectKey=3tier-backend-${ENVIRONMENT.toLowerCase()} \
+                            -Dsonar.host.url=${SONAR_HOST}
+                        '''
                     }
                 }
             }
@@ -139,7 +136,7 @@ pipeline {
 }
 
 def sendSlackNotification(title, message, buildUrl) {
-    def jsonPayload = """{
+    def payload = """{
         "attachments": [
             {
                 "color": "#FF0000",
@@ -152,7 +149,6 @@ def sendSlackNotification(title, message, buildUrl) {
                 ]
             }
         ]
-    }""".replaceAll("\n", "").replaceAll("\\s+", " ")
-
-    sh(script: "curl -s -X POST -H 'Content-type: application/json' --data '${jsonPayload}' \"\$SLACK_URL\" || true")
+    }"""
+    sh(script: 'curl -s -X POST -H "Content-type: application/json" --data \'' + payload.replaceAll('\n', '') + '\' "$SLACK_URL" || true', returnStdout: true)
 }
