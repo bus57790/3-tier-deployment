@@ -41,7 +41,6 @@ pipeline {
         stage('SonarQube Quality Gate Enforcement') {
             steps {
                 script {
-                    // Increased timeout duration from 5 to 15 minutes
                     timeout(time: 15, unit: 'MINUTES') {
                         def qg = waitForQualityGate()
                         if (qg.status != 'OK') {
@@ -54,7 +53,6 @@ pipeline {
 
         stage('Dependency & Security Vulnerability Scan') {
             steps {
-                // Non-blocking report first, followed by strict blocking gate
                 sh 'trivy fs --severity LOW,MEDIUM,HIGH,CRITICAL .'
                 sh 'trivy fs --exit-code 1 --severity HIGH,CRITICAL .'
             }
@@ -65,11 +63,9 @@ pipeline {
                 script {
                     def envTag = params.ENVIRONMENT.toLowerCase()
                     
-                    // Build Frontend & Backend Images
                     sh "docker build -t ${HARBOR_HOST}/${HARBOR_PROJECT}/frontend:${envTag}-${params.IMAGE_TAG} ./frontend"
                     sh "docker build -t ${HARBOR_HOST}/${HARBOR_PROJECT}/backend:${envTag}-${params.IMAGE_TAG} ./backend"
 
-                    // Scan built backend image with Trivy (Fails build on HIGH or CRITICAL)
                     sh "trivy image --severity LOW,MEDIUM,HIGH,CRITICAL ${HARBOR_HOST}/${HARBOR_PROJECT}/backend:${envTag}-${params.IMAGE_TAG}"
                     sh "trivy image --exit-code 1 --severity HIGH,CRITICAL ${HARBOR_HOST}/${HARBOR_PROJECT}/backend:${envTag}-${params.IMAGE_TAG}"
                 }
@@ -85,7 +81,6 @@ pipeline {
                     sh "docker push ${HARBOR_HOST}/${HARBOR_PROJECT}/frontend:${envTag}-${params.IMAGE_TAG}"
                     sh "docker push ${HARBOR_HOST}/${HARBOR_PROJECT}/backend:${envTag}-${params.IMAGE_TAG}"
                     
-                    // Tag as latest for environment docker-compose references
                     sh "docker tag ${HARBOR_HOST}/${HARBOR_PROJECT}/frontend:${envTag}-${params.IMAGE_TAG} ${HARBOR_HOST}/${HARBOR_PROJECT}/frontend:${envTag}-latest"
                     sh "docker tag ${HARBOR_HOST}/${HARBOR_PROJECT}/backend:${envTag}-${params.IMAGE_TAG} ${HARBOR_HOST}/${HARBOR_PROJECT}/backend:${envTag}-latest"
                     
@@ -103,12 +98,10 @@ pipeline {
                 script {
                     def envLower = params.ENVIRONMENT.toLowerCase()
                     
-                    // Copy compose files to target node
                     sh "ssh ${TARGET_USER}@${TARGET_NODE} 'mkdir -p ~/app/${envLower}'"
                     sh "scp -r deployments/${envLower}/* ${TARGET_USER}@${TARGET_NODE}:~/app/${envLower}/"
                     sh "scp -r database ${TARGET_USER}@${TARGET_NODE}:~/app/"
 
-                    // Execute Remote Docker Compose Deployment
                     sh """
                         ssh ${TARGET_USER}@${TARGET_NODE} '
                             cd ~/app/${envLower} && \
@@ -126,7 +119,6 @@ pipeline {
             }
             steps {
                 script {
-                    // Update Kubernetes image tag in Git repository to trigger ArgoCD sync on minikube
                     sh """
                         git config user.name "Jenkins CI"
                         git config user.email "jenkins@192.168.1.184"
@@ -144,29 +136,13 @@ pipeline {
     post {
         failure {
             script {
-                def failedStage = "Unknown Stage"
-                try {
-                    def stageList = currentBuild.rawBuild.getExecution().getBlocks()
-                    for (block in stageList) {
-                        if (block.getTimingInfo() != null && block.getError() != null) {
-                            failedStage = block.getDisplayName()
-                            break
-                        }
-                    }
-                } catch (Exception e) {
-                    failedStage = "Pipeline Execution Failure"
-                }
-
                 def alertTitle = "🚨 DevSecOps Pipeline Failure"
-                def alertMessage = "Build *#${env.BUILD_NUMBER}* for *${env.JOB_NAME}* failed at stage: *${failedStage}*."
+                def alertMessage = "Build *#${env.BUILD_NUMBER}* for *${env.JOB_NAME}* failed."
 
-                // Extract Slack and Teams Webhook secrets on demand
                 withCredentials([
-                    string(credentialsId: 'slack-webhook-url', variable: 'SLACK_URL'),
-                    string(credentialsId: 'teams-webhook-url', variable: 'TEAMS_URL')
+                    string(credentialsId: 'slack-webhook-url', variable: 'SLACK_URL')
                 ]) {
                     sendSlackNotification(alertTitle, alertMessage, env.BUILD_URL, env.SLACK_URL)
-                    sendTeamsNotification(alertTitle, alertMessage, env.BUILD_URL, failedStage, env.TEAMS_URL)
                 }
             }
         }
@@ -190,42 +166,6 @@ def sendSlackNotification(title, message, buildUrl, webhookUrl) {
                     { "title": "Environment", "value": "${params.ENVIRONMENT}", "short": true },
                     { "title": "Image Tag", "value": "${params.IMAGE_TAG}", "short": true }
                 ]
-            }
-        ]
-    }"""
-    sh(script: "curl -s -X POST -H 'Content-type: application/json' --data '${payload.replaceAll('\n', '')}' ${webhookUrl} || true", returnStdout: true)
-}
-
-def sendTeamsNotification(title, message, buildUrl, failedStage, webhookUrl) {
-    def payload = """{
-        "type": "message",
-        "attachments": [
-            {
-                "contentType": "application/vnd.microsoft.card.adaptive",
-                "content": {
-                    "\$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                    "type": "AdaptiveCard",
-                    "version": "1.2",
-                    "body": [
-                        { "type": "TextBlock", "text": "${title}", "weight": "Bolder", "size": "Large", "color": "Attention" },
-                        { "type": "TextBlock", "text": "${message}", "wrap": true },
-                        {
-                            "type": "FactSet",
-                            "facts": [
-                                { "title": "Failed Stage:", "value": "${failedStage}" },
-                                { "title": "Environment:", "value": "${params.ENVIRONMENT}" },
-                                { "title": "Image Tag:", "value": "${params.IMAGE_TAG}" }
-                            ]
-                        }
-                    ],
-                    "actions": [
-                        {
-                            "type": "Action.OpenUrl",
-                            "title": "View Jenkins Log",
-                            "url": "${buildUrl}"
-                        }
-                    ]
-                }
             }
         ]
     }"""
