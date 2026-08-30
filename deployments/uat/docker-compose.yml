@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  database-uat:
+    image: postgres:15-alpine
+    container_name: app-db-uat
+    environment:
+      POSTGRES_DB: app_uat
+      POSTGRES_USER: uat_user
+      POSTGRES_PASSWORD: uat_secure_pass
+    ports:
+      - "5433:5432"
+    volumes:
+      - uat_db_data:/var/lib/postgresql/data
+      - ../../database/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  backend-uat:
+    image: 192.168.1.184/3tier/backend:uat-latest
+    container_name: app-backend-uat
+    environment:
+      APP_ENV: uat
+      SPRING_DATASOURCE_URL: jdbc:postgresql://database-uat:5432/app_uat
+      SPRING_DATASOURCE_USERNAME: uat_user
+      SPRING_DATASOURCE_PASSWORD: uat_secure_pass
+    ports:
+      - "8081:8080"
+    depends_on:
+      - database-uat
+
+  frontend-uat:
+    image: 192.168.1.184/3tier/frontend:uat-latest
+    container_name: app-frontend-uat
+    ports:
+      - "81:80"
+    depends_on:
+      - backend-uat
+
+volumes:
+  uat_db_data:

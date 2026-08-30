@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS system_audit (
+    id SERIAL PRIMARY KEY,
+    environment VARCHAR(10) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO system_audit (environment) VALUES ('INITIALIZED');

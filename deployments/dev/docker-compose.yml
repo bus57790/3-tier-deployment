@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  database-dev:
+    image: postgres:15-alpine
+    container_name: app-db-dev
+    environment:
+      POSTGRES_DB: app_dev
+      POSTGRES_USER: dev_user
+      POSTGRES_PASSWORD: dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - dev_db_data:/var/lib/postgresql/data
+      - ../../database/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  backend-dev:
+    image: 192.168.1.184/3tier/backend:dev-latest
+    container_name: app-backend-dev
+    environment:
+      APP_ENV: dev
+      SPRING_DATASOURCE_URL: jdbc:postgresql://database-dev:5432/app_dev
+      SPRING_DATASOURCE_USERNAME: dev_user
+      SPRING_DATASOURCE_PASSWORD: dev_password
+    ports:
+      - "8080:8080"
+    depends_on:
+      - database-dev
+
+  frontend-dev:
+    image: 192.168.1.184/3tier/frontend:dev-latest
+    container_name: app-frontend-dev
+    ports:
+      - "80:80"
+    depends_on:
+      - backend-dev
+
+volumes:
+  dev_db_data:
