@@ -19,7 +19,7 @@ pipeline {
         stage('Checkout Source') {
             steps {
                 git branch: "${params.ENVIRONMENT == 'PROD' ? 'main' : params.ENVIRONMENT.toLowerCase()}",
-                    url: "http://${HARBOR_HOST}/git/3tier-app.git"
+                    url: "https://github.com/bus57790/3-tier-deployment.git"
             }
         }
 
