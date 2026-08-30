@@ -1,17 +1,17 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: backend-prod
-  namespace: prod
+  name: backend-dev
+  namespace: dev
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: backend-prod
+      app: backend-dev
   template:
     metadata:
       labels:
-        app: backend-prod
+        app: backend-dev
     spec:
       containers:
       - name: backend
@@ -20,13 +20,13 @@ spec:
         - name: APP_ENV
           value: prod
         - name: SPRING_DATASOURCE_URL
-          value: jdbc:postgresql://postgres-prod-service:5432/app_prod
+          value: jdbc:postgresql://postgres-dev-service:5432/app_prod
         - name: SPRING_DATASOURCE_USERNAME
           value: prod_admin
         - name: SPRING_DATASOURCE_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: db-prod-secret
+              name: db-dev-secret
               key: password
         ports:
         - containerPort: 8080
@@ -34,10 +34,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: backend-prod-service
-  namespace: prod
+  name: backend-dev-service
+  namespace: dev
 spec:
   ports:
   - port: 8080
   selector:
-    app: backend-prod
+    app: backend-dev

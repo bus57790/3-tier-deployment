@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: postgres-prod
-  namespace: prod
+  name: postgres-dev
+  namespace: dev
 spec:
-  serviceName: postgres-prod
+  serviceName: postgres-dev
   replicas: 1
   selector:
     matchLabels:
-      app: postgres-prod
+      app: postgres-dev
   template:
     metadata:
       labels:
-        app: postgres-prod
+        app: postgres-dev
     spec:
       containers:
       - name: postgres
@@ -25,7 +25,7 @@ spec:
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: db-prod-secret
+              name: db-dev-secret
               key: password
         ports:
         - containerPort: 5432
@@ -33,10 +33,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: postgres-prod-service
-  namespace: prod
+  name: postgres-dev-service
+  namespace: dev
 spec:
   ports:
   - port: 5432
   selector:
-    app: postgres-prod
+    app: postgres-dev
