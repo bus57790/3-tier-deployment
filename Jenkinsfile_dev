@@ -112,26 +112,13 @@ pipeline {
             steps {
                 script {
                     withCredentials([gitUsernamePassword(credentialsId: 'github-credentials', gitToolName: 'git-default')]) {
-                        // Fix detached HEAD state
-                        sh 'git checkout main || git checkout -b main'
-                        sh 'git pull origin main'
-
                         sh 'git config user.name "Jenkins CI"'
                         sh 'git config user.email "jenkins@192.168.1.184"'
-
-                        // Update manifest image tags
                         sh "sed -i 's|image: 192.168.1.184:9443/3tier/backend:.*|image: 192.168.1.184:9443/3tier/backend:prod-${params.IMAGE_TAG}|g' deployments/prod/k8s/02-backend.yaml"
                         sh "sed -i 's|image: 192.168.1.184:9443/3tier/frontend:.*|image: 192.168.1.184:9443/3tier/frontend:prod-${params.IMAGE_TAG}|g' deployments/prod/k8s/03-frontend.yaml"
-
-                        // Verify change before attempting commit
-                        def status = sh(script: 'git status --porcelain deployments/prod/k8s/', returnStdout: true).trim()
-                        if (status) {
-                            sh 'git add deployments/prod/k8s/'
-                            sh "git commit -m 'Update PROD image tag to ${params.IMAGE_TAG} [skip ci]'"
-                            sh 'git push origin main'
-                        } else {
-                            echo "No changes detected in deployments/prod/k8s/. Skipping commit."
-                        }
+                        sh 'git add deployments/prod/k8s/'
+                        sh "git commit -m 'Update PROD image tag to ${params.IMAGE_TAG} [skip ci]'"
+                        sh 'git push origin HEAD:main'
                     }
                 }
             }
