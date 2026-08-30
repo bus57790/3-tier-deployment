@@ -2,9 +2,8 @@ pipeline {
     agent any
 
     environment {
-        HARBOR_HOST    = '192.168.1.184'
+        HARBOR_HOST    = '192.168.1.184:9443'
         HARBOR_PROJECT = '3tier'
-        HARBOR_CREDS   = credentials('harbor-credentials')
         TARGET_NODE    = '192.168.1.183'
         TARGET_USER    = 'deployer'
         SONAR_HOST     = 'http://192.168.1.184:9000'
@@ -28,32 +27,15 @@ pipeline {
             steps {
                 withSonarQubeEnv('SonarQube-Server') {
                     dir('backend') {
-                        sh """
+                        sh '''
                             mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-                            -Dsonar.projectKey=3tier-backend-${params.ENVIRONMENT.toLowerCase()} \
+                            -Dsonar.projectKey=3tier-backend-${ENVIRONMENT.toLowerCase()} \
                             -Dsonar.host.url=${SONAR_HOST}
-                        """
+                        '''
                     }
                 }
             }
         }
-
-        // --- SONARQUBE QUALITY GATE ENFORCEMENT REMOVED ---
-        // Commented out to prevent Quality Gate failures from aborting the pipeline execution.
-        /*
-        stage('SonarQube Quality Gate Enforcement') {
-            steps {
-                script {
-                    timeout(time: 15, unit: 'MINUTES') {
-                        def qg = waitForQualityGate()
-                        if (qg.status != 'OK') {
-                            error "Pipeline aborted: SonarQube Quality Gate failed with status ${qg.status}"
-                        }
-                    }
-                }
-            }
-        }
-        */
 
         stage('Build Container Images') {
             steps {
@@ -70,7 +52,12 @@ pipeline {
             steps {
                 script {
                     def envTag = params.ENVIRONMENT.toLowerCase()
-                    sh "echo ${HARBOR_CREDS_PSW} | docker login ${HARBOR_HOST} -u ${HARBOR_CREDS_USR} --password-stdin"
+                    
+                    withCredentials([usernamePassword(credentialsId: 'harbor-credentials', passwordVariable: 'HARBOR_PSW', usernameVariable: 'HARBOR_USR')]) {
+                        sh '''
+                            echo "$HARBOR_PSW" | docker login ${HARBOR_HOST} -u "$HARBOR_USR" --password-stdin
+                        '''
+                    }
                     
                     sh "docker push ${HARBOR_HOST}/${HARBOR_PROJECT}/frontend:${envTag}-${params.IMAGE_TAG}"
                     sh "docker push ${HARBOR_HOST}/${HARBOR_PROJECT}/backend:${envTag}-${params.IMAGE_TAG}"
@@ -116,8 +103,8 @@ pipeline {
                     sh """
                         git config user.name "Jenkins CI"
                         git config user.email "jenkins@192.168.1.184"
-                        sed -i 's|image: 192.168.1.184/3tier/backend:.*|image: 192.168.1.184/3tier/backend:prod-${params.IMAGE_TAG}|g' deployments/prod/k8s/02-backend.yaml
-                        sed -i 's|image: 192.168.1.184/3tier/frontend:.*|image: 192.168.1.184/3tier/frontend:prod-${params.IMAGE_TAG}|g' deployments/prod/k8s/03-frontend.yaml
+                        sed -i 's|image: 192.168.1.184:9443/3tier/backend:.*|image: 192.168.1.184:9443/3tier/backend:prod-${params.IMAGE_TAG}|g' deployments/prod/k8s/02-backend.yaml
+                        sed -i 's|image: 192.168.1.184:9443/3tier/frontend:.*|image: 192.168.1.184:9443/3tier/frontend:prod-${params.IMAGE_TAG}|g' deployments/prod/k8s/03-frontend.yaml
                         git add deployments/prod/k8s/
                         git commit -m "Update PROD image tag to ${params.IMAGE_TAG} [skip ci]"
                         git push origin main
