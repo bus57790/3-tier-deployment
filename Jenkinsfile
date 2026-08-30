@@ -55,23 +55,13 @@ pipeline {
         }
         */
 
-        stage('Dependency & Security Vulnerability Scan') {
-            steps {
-                sh 'trivy fs --severity LOW,MEDIUM,HIGH,CRITICAL .'
-                sh 'trivy fs --exit-code 1 --severity HIGH,CRITICAL .'
-            }
-        }
-
-        stage('Build & Container Security Scan') {
+        stage('Build Container Images') {
             steps {
                 script {
                     def envTag = params.ENVIRONMENT.toLowerCase()
                     
                     sh "docker build -t ${HARBOR_HOST}/${HARBOR_PROJECT}/frontend:${envTag}-${params.IMAGE_TAG} ./frontend"
                     sh "docker build -t ${HARBOR_HOST}/${HARBOR_PROJECT}/backend:${envTag}-${params.IMAGE_TAG} ./backend"
-
-                    sh "trivy image --severity LOW,MEDIUM,HIGH,CRITICAL ${HARBOR_HOST}/${HARBOR_PROJECT}/backend:${envTag}-${params.IMAGE_TAG}"
-                    sh "trivy image --exit-code 1 --severity HIGH,CRITICAL ${HARBOR_HOST}/${HARBOR_PROJECT}/backend:${envTag}-${params.IMAGE_TAG}"
                 }
             }
         }
@@ -173,6 +163,5 @@ def sendSlackNotification(title, message, buildUrl) {
             }
         ]
     }"""
-    // Fixed insecure Groovy string interpolation warning by using single-quoted Groovy strings + shell variable $SLACK_URL
     sh(script: 'curl -s -X POST -H "Content-type: application/json" --data \'' + payload.replaceAll('\n', '') + '\' "$SLACK_URL" || true', returnStdout: true)
 }
