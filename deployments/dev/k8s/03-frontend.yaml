@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: 192.168.1.184/3tier/frontend:prod-latest
+        image: 192.168.1.184:9443/3tier/frontend:dev-latest
         ports:
         - containerPort: 80
 ---

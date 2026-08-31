@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: 192.168.1.184/3tier/backend:prod-latest
+        image: 192.168.1.184:9443/3tier/backend:dev-latest
         env:
         - name: APP_ENV
           value: prod
