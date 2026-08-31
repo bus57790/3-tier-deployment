@@ -13,6 +13,8 @@ spec:
       labels:
         app: backend-prod
     spec:
+      imagePullSecrets:
+        - name: regcred
       containers:
       - name: backend
         image: 192.168.1.184/3tier/backend:prod-latest
